@@ -1,0 +1,93 @@
+#define	VBUS_CHK_PERIOD_mS/***************/7
+
+#define	VBUS_MAX_VALUE/*******************/328 //Con 230Vac de entrada y Cin=27uF, leo un máximo de 328V
+
+#define VBUS_TH_low_speed/****************/150		//En la medición, cuando rectifico media onda, el Vbus llega a un minimo de 60,8V
+#define VBUS_TH_high_speed/***************/190	//En la medición, cuando no rectifico, el Vbus llega a un mínimo de 205,5V
+#define VBUS_TH_shut_down/****************/45		//Dado que el mínimo medido es de 60,8V estimo que si leo un minimo de 45V entonces se está apagando el equipo
+#define	VBUS_HIGH/************************/1
+#define	VBUS_LOW/*************************/0
+#define VBUS_MED/*************************/2
+#define VBUS_MAX_SAMPLES/*****************/20
+
+#define LOW_VOLTAGE_RESTART_DEADTIME_mS/**/200
+#define	DISCHARGE_TIME_mS/****************/350
+
+
+void check_VBus_task(void)
+{
+	static int32_t sample_cnt=0;
+	int32_t sample;
+		if(board_scheduler_is_time_expired(vbus_chk_timer))
+		{
+			sample=board_get_bus_voltage();
+			if(sample<vbus_min)
+				vbus_min=sample;
+			sample_cnt++;
+
+			//Cuando chequeo el minimo de "VBUS_MAX_SAMPLES" muestras, 
+			//analizo ese valor para determinar el estado del VBUS y ejecuto la acción necesaria
+			if(sample_cnt==VBUS_MAX_SAMPLES)
+			{
+				//Primero chequeo cual es el nivel y modifico el flag
+				if(vbus_min<VBUS_TH_shut_down)
+					vbus_flag=VBUS_LOW;
+				else
+				{
+					if(vbus_min<=VBUS_TH_low_speed)
+						vbus_flag=VBUS_MED;
+				}
+				if(vbus_min>=VBUS_TH_high_speed)
+					vbus_flag=VBUS_HIGH;
+				sample_cnt=0;
+				vbus_min=VBUS_MAX_VALUE;
+			
+		
+				//En caso de detectar un cambio en el bus de alimentación, ejecuto la tarea que corresponda al cambio
+				if(vbus_flag==VBUS_HIGH)
+				{
+					if(vbus_prev_flag==VBUS_LOW)
+					{
+						restart_timer=board_scheduler_load_timer(LOW_VOLTAGE_RESTART_DEADTIME_mS);
+						board_gpio_output_set(BOARD_LED_port,BOARD_LED_pin);
+					}
+					if((vbus_prev_flag==VBUS_MED)||(vbus_prev_flag==VBUS_HIGH))
+						set_motor_high_speed();
+				}
+				else if(vbus_flag==VBUS_LOW)
+				{
+					if((vbus_prev_flag==VBUS_HIGH)||(vbus_prev_flag==VBUS_MED))
+					{
+						//motor_1phase_stop_motor(MOTOR_STOP_METHOD_BREAK,MOTOR_STOPPED);
+						discharge_timer=board_scheduler_load_timer(DISCHARGE_TIME_mS);
+						board_gpio_output_reset(BOARD_LED_port,BOARD_LED_pin);
+					}
+					else
+					{
+						if(board_scheduler_is_time_expired(discharge_timer))
+							motor_1phase_stop_motor(MOTOR_STOP_METHOD_FREEWHEEL,MOTOR_STOPPED);
+						//mientras el bus esté bajo, mantengo reiniciando el timer para que no intente arrancar
+						restart_timer=board_scheduler_load_timer(LOW_VOLTAGE_RESTART_DEADTIME_mS);
+					}
+				}
+				else if(vbus_flag==VBUS_MED)
+				{
+					//si me mantengo en VBUS_MED, no hago nada
+					if(vbus_prev_flag!=VBUS_MED)
+					{
+						//si estoy en VBUS_MED y vengo de otro estado, configuro la velocidad baja
+						set_motor_low_speed();
+						if(vbus_prev_flag==VBUS_LOW)
+						{
+							//Si el estado previo era VBUS_LOW establezco el temporizador para el rearranque
+							restart_timer=board_scheduler_load_timer(LOW_VOLTAGE_RESTART_DEADTIME_mS);
+							board_gpio_output_set(BOARD_LED_port,BOARD_LED_pin);
+						}
+					}
+				}
+				vbus_prev_flag=vbus_flag;
+			}
+			//Recargo temporizador periódico
+			vbus_chk_timer=board_scheduler_load_timer(VBUS_CHK_PERIOD_mS);
+		}
+}

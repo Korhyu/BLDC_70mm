@@ -1,0 +1,59 @@
+Capa 0
+static void micro_adc_config(void)
+{
+
+  /* ADCLK frequency is set to CK_AHB/64                                                                    */
+  CKCU_SetADCPrescaler(CKCU_ADCPRE_DIV64);	
+  /* Config AFIO mode as ADC function  	*/
+	AFIO_GPxConfig(GPIO_PA, AFIO_PIN_3, AFIO_FUN_ADC);
+  AFIO_GPxConfig(GPIO_PA, AFIO_PIN_6, AFIO_FUN_ADC);	
+  AFIO_GPxConfig(GPIO_PA, AFIO_PIN_7, AFIO_FUN_ADC);
+	
+	/* Continuous Mode, Length 1, SubLength 1                                                                 */
+  ADC_RegularGroupConfig(HT_ADC, CONTINUOUS_MODE, 3, 3);	
+	  /* ADC Channel n, Rank 0, Sampling clock is (1.5 + 0) ADCLK
+     Conversion time = (sampling clock + 12.5) / ADCLK = 12.4 uS */
+	ADC_SamplingTimeConfig(HT_ADC,10);
+	
+	ADC_RegularChannelConfig(HT_ADC, ADC_CH_3, 0);
+	ADC_RegularChannelConfig(HT_ADC, ADC_CH_6, 1);
+  ADC_RegularChannelConfig(HT_ADC, ADC_CH_7, 2);
+	
+	  /* Use Software Trigger as ADC trigger source                                                             */
+  ADC_RegularTrigConfig(HT_ADC, ADC_TRIG_SOFTWARE);
+	
+	ADC_Cmd(HT_ADC, ENABLE);
+
+  /* Software trigger to start continuous mode                                                              */
+  ADC_SoftwareStartConvCmd(HT_ADC, ENABLE);
+	
+	
+}
+
+Capa 1
+int32_t board_get_bus_voltage(void)
+{
+	uint32_t val;
+	
+	board_adc_get_measure(BOARD_ADC_CHANNEL_VBUS_SEL,&val);
+
+	return ((val*401)>>12);
+}
+
+//-------------------------------------------
+//				      	ADC 
+//-------------------------------------------
+int32_t board_adc_get_measure (uint32_t board_adc_channel_select, uint32_t * measure_result)
+{
+	switch(board_adc_channel_select)
+	{
+		case BOARD_ADC_CHANNEL_NTC_POWER_SEL: 	 *measure_result = ADC_GetConversionData(HT_ADC, BOARD_ADC_CHANNEL_NTC_POWER_SEL);
+												  break;
+		case BOARD_ADC_CHANNEL_SHUNT_SEL: 		 *measure_result = ADC_GetConversionData(HT_ADC, BOARD_ADC_CHANNEL_SHUNT_SEL);
+			 									  break;
+		case BOARD_ADC_CHANNEL_VBUS_SEL: 		 *measure_result = ADC_GetConversionData(HT_ADC, BOARD_ADC_CHANNEL_VBUS_SEL);
+												  break;
+		default : return -1;
+	}
+	return 0;
+}
