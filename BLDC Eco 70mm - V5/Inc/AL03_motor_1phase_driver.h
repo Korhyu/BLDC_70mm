@@ -32,6 +32,11 @@
 /* Corriente para detencion de emergencia	*/
 #define MOTOR_CURRENT_TO_FORCE_STOP		3
 
+/* Defines para el control de la velocidad */
+#define CONTROL_BY_VOLTAGE			0
+#define CONTROL_BY_SPEED			1
+
+
 /************************************************************************
  * 		Funciones públicas para el comando del motor BLDC monofase		*
  ************************************************************************/

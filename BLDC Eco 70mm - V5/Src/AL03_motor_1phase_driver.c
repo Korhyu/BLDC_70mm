@@ -122,6 +122,7 @@ struct motor_1phase_drive{
 	int32_t stop_running_flag;
 
 	int32_t start_first_steps_counter;
+	int32_t speed_control_method;
 
 	int32_t	first_steps_deadtime_timer;
 	int32_t bootstrap_charge_timer;
@@ -220,6 +221,10 @@ int32_t motor_1phase_init(void)
 	
 	//Inicializo la medición de velocidad de rotación
 	motor_meas_rotation_speed_init();
+
+	//Configuro el control de velocidad
+	//motor.speed_control_method = CONTROL_BY_SPEED;
+	motor.speed_control_method = CONTROL_BY_VOLTAGE;
 
 	
 	return 0;
@@ -621,22 +626,30 @@ void motor_meas_rotation_speed (void)
 	motor_measure_timer_set_timeout_us(MEASURE_TIMER_MAX_COUNT_uS);
 
 	//Realizo los cálculos correspondientes para tener la velocidad en distintas unidades
-	//motor.electrical_period_us = MOTOR_ROTOR_NUMBER_OF_POLES*motor.time_from_zcd_to_zcd;
-	//motor.frequency_hz = CONSTANT_MHZ_TO_HZ/motor.electrical_period_us;
-	//motor.rpm = motor.frequency_hz*CONSTANT_HZ_TO_RPM;
+	motor.electrical_period_us = MOTOR_ROTOR_NUMBER_OF_POLES*motor.time_from_zcd_to_zcd;
+	motor.frequency_hz = CONSTANT_MHZ_TO_HZ/motor.electrical_period_us;
+	motor.rpm = motor.frequency_hz*CONSTANT_HZ_TO_RPM;
 
 	//Calculo los valores promedio
 	if(motor.time_from_zcd_to_zcd_avg==0)
 	{
 		//En la primer vuelta, cargo los valores instantáneos medidos
 		motor.time_from_zcd_to_zcd_avg = motor.time_from_zcd_to_zcd;
-		//motor.electrical_period_us_avg = motor.electrical_period_us;
+		motor.electrical_period_us_avg = motor.electrical_period_us;
 	}
 	else
 	{
 		//Luego de la primer vuelta, promedio los resultados
 		motor.time_from_zcd_to_zcd_avg = (motor.time_from_zcd_to_zcd_avg+motor.time_from_zcd_to_zcd)>>1;
-		//motor.electrical_period_us_avg =(motor.electrical_period_us_avg+motor.electrical_period_us)>>1;
+		motor.electrical_period_us_avg =(motor.electrical_period_us_avg+motor.electrical_period_us)>>1;
+
+		//TODO Hay que cambiar los filtros estos para aumentar la profundidad y tener mejor medicion
+		/*
+		Tomar en cuenta que se llama a esta funcion cada flanco negativo del Sensor Hall, esto hay
+		que tenerlo en mente cuando se dimensione la actuacion sobre el duty para evitar oscilaciones
+		sobre la velocidad.
+		*/
+
 	}
 }
 
